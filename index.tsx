@@ -1,7 +1,7 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { Web3AuthProvider } from './auth/Web3AuthContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,8 +11,6 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <Web3AuthProvider>
-      <App />
-    </Web3AuthProvider>
+    <App />
   </React.StrictMode>
 );
