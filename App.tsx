@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ethers, BrowserProvider } from 'ethers';
 import { type Chain, type TransactionStatus, type TransactionRecord } from './types';
 import { SUPPORTED_CHAINS } from './config/chains';
 import { generatePaymentMemo } from './services/geminiService';
@@ -13,26 +14,6 @@ import { ChainSelector } from './components/ChainSelector';
 
 // A utility to shorten addresses
 const shortenAddress = (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`;
-
-// Helper to convert an ETH string amount to wei BigInt for precision
-const toWei = (ethAmount: string): bigint => {
-    const parts = ethAmount.split('.');
-    const integerPart = parts[0] || '0';
-    let fractionalPart = parts[1] || '';
-
-    if (fractionalPart.length > 18) {
-        fractionalPart = fractionalPart.substring(0, 18);
-    } else {
-        fractionalPart = fractionalPart.padEnd(18, '0');
-    }
-
-    return BigInt(integerPart + fractionalPart);
-};
-
-// Helper to convert Uint8Array to a hex string
-const uint8ArrayToHex = (bytes: Uint8Array) =>
-  bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
-
 
 const App: React.FC = () => {
   const [currentAccount, setCurrentAccount] = useState<string | null>(null);
@@ -57,14 +38,15 @@ const App: React.FC = () => {
         return;
       }
 
-      const accounts = await ethereum.request({ method: 'eth_accounts' });
+      const provider = new BrowserProvider(ethereum);
+      const accounts = await provider.listAccounts();
 
-      if (accounts.length !== 0) {
+      if (accounts.length > 0) {
         const account = accounts[0];
-        setCurrentAccount(account);
+        setCurrentAccount(account.address);
         
-        const chainId = await ethereum.request({ method: 'eth_chainId' });
-        setCurrentChainId(chainId);
+        const network = await provider.getNetwork();
+        setCurrentChainId('0x' + network.chainId.toString(16));
       } else {
         console.log("No authorized account found");
       }
@@ -104,13 +86,15 @@ const App: React.FC = () => {
     try {
       const { ethereum } = window as any;
       if (!ethereum) {
-        alert("Get MetaMask!");
+        setTransactionStatus({ isLoading: false, error: "MetaMask not found. Please install the extension.", success: null });
         return;
       }
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      const provider = new BrowserProvider(ethereum);
+      const accounts = await provider.send('eth_requestAccounts', []);
       setCurrentAccount(accounts[0]);
     } catch (error) {
       console.error(error);
+      setTransactionStatus({ isLoading: false, error: "Failed to connect wallet.", success: null });
     }
   };
   
@@ -186,26 +170,21 @@ const App: React.FC = () => {
         const { ethereum } = window as any;
         if (!ethereum) throw new Error("No crypto wallet found");
 
-        const amountInWei = toWei(amount).toString(16);
+        const provider = new BrowserProvider(ethereum);
+        const signer = await provider.getSigner();
         
-        const memoBytes = new TextEncoder().encode(memo);
-        const memoHex = memo ? `0x${uint8ArrayToHex(memoBytes)}` : '0x';
+        const memoHex = memo ? ethers.hexlify(new TextEncoder().encode(memo)) : '0x';
 
         const txParams = {
-            from: currentAccount,
             to: recipient,
-            value: `0x${amountInWei}`,
+            value: ethers.parseEther(amount),
             data: memoHex,
-            chainId: currentChain.chainId,
         };
 
-        const txHash = await ethereum.request({
-            method: 'eth_sendTransaction',
-            params: [txParams],
-        });
+        const tx = await signer.sendTransaction(txParams);
 
         const newTransaction: TransactionRecord = {
-            hash: txHash,
+            hash: tx.hash,
             recipient,
             amount,
             memo,
@@ -217,7 +196,8 @@ const App: React.FC = () => {
         setMemo('');
 
     } catch (error: any) {
-        setTransactionStatus({ isLoading: false, error: error.message || "Transaction failed.", success: null });
+        const errorMessage = error.info?.error?.message || error.message || "Transaction failed.";
+        setTransactionStatus({ isLoading: false, error: errorMessage, success: null });
         console.error(error);
     }
   };
@@ -263,7 +243,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center py-10 px-4 font-mono">
         <div className="w-full max-w-md mx-auto">
             <header className="flex justify-between items-center mb-8">
-                <h1 className="text-2xl font-bold text-indigo-400">CryptoPay AI</h1>
+                <h1 className="text-2xl font-bold text-indigo-400">Web3 PayWave</h1>
                 {currentAccount ? (
                     <div className="flex items-center bg-gray-800 p-2 rounded-lg">
                          <WalletIcon className="w-5 h-5 mr-2 text-indigo-400" />
