@@ -1,0 +1,5 @@
+{
+  "name": "Web3 PayWave",
+  "description": "A sleek and modern Web3 payment application that allows users to connect their crypto wallet and send ETH payments. It features an AI-powered memo generator using the Gemini API to add a fun touch to transactions.",
+  "requestFramePermissions": []
+}
